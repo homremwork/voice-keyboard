@@ -7,6 +7,7 @@ import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import org.json.JSONObject
 import java.io.File
 
 class WhisperApiClient(private val http: OkHttpClient) : SpeechToTextClient {
@@ -97,9 +98,10 @@ class WhisperApiClient(private val http: OkHttpClient) : SpeechToTextClient {
                 val responseBody = response.body?.string()?.trim() ?: ""
 
                 if (response.isSuccessful) {
+                    val transcriptionText = extractTranscriptionText(responseBody)
                     Result.success(
                         HallucinationFilter.clean(
-                            rawText = responseBody,
+                            rawText = transcriptionText,
                             prompt = config.prompt,
                             vocabulary = config.vocabulary,
                             recordingDurationMs = config.recordingDurationMs
@@ -111,6 +113,22 @@ class WhisperApiClient(private val http: OkHttpClient) : SpeechToTextClient {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun extractTranscriptionText(responseBody: String): String {
+        val trimmed = responseBody.trim()
+        if (!trimmed.startsWith("{")) return trimmed
+
+        return try {
+            val json = JSONObject(trimmed)
+            if (json.has("text") && !json.isNull("text")) {
+                json.optString("text")
+            } else {
+                trimmed
+            }
+        } catch (_: Exception) {
+            trimmed
         }
     }
 }
